@@ -17,11 +17,20 @@ jobs:
       - name: Ekstrak ZIP (jika repo berisi zip) & cari root proyek
         id: proj
         run: |
-          z=$(find . -iname 'AlfyConverter*.zip' -not -path './.git/*' | head -n1)
-          if [ -n "$z" ]; then rm -rf temp_project && mkdir temp_project && unzip -q "$z" -d temp_project; fi
-          f=$(find . -name settings.gradle.kts -not -path './.git/*' | head -n1)
+          echo "== Isi repo =="; find . -not -path './.git/*' -not -path './.git' | head -50
+          z=$(find . -iname '*.zip' -not -path './.git/*' | head -n1)
+          if [ -n "$z" ]; then
+            rm -rf temp_project && mkdir temp_project && unzip -q "$z" -d temp_project
+            root=temp_project
+          else
+            root=.
+          fi
+          f=$(find "$root" -name settings.gradle.kts -not -path './.git/*' | head -n1)
           [ -z "$f" ] && { echo "settings.gradle.kts tidak ditemukan"; exit 1; }
-          echo "dir=$(dirname "$f")" >> "$GITHUB_OUTPUT"
+          d=$(dirname "$f")
+          echo "== Root proyek: $d =="; cat "$f"; ls -la "$d" "$d/app" || true
+          [ -f "$d/app/build.gradle.kts" ] || { echo "app/build.gradle.kts tidak ada di $d"; exit 1; }
+          echo "dir=$d" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-java@v4
         with:
