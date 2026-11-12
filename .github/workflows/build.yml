@@ -13,12 +13,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Ekstrak ZIP (jika repo berisi zip) & cari root proyek
         id: proj
         run: |
           echo "== Isi repo =="; find . -not -path './.git/*' -not -path './.git' | head -50
-          z=$(find . -iname '*.zip' -not -path './.git/*' | head -n1)
+          z=""; best=0
+          while IFS= read -r f; do
+            t=$(git log -1 --format=%ct -- "$f"); echo "zip: $f ($t)"
+            if [ "${t:-0}" -ge "$best" ]; then best=${t:-0}; z="$f"; fi
+          done < <(find . -iname '*.zip' -not -path './.git/*')
+          echo "Dipakai: $z"
           if [ -n "$z" ]; then
             rm -rf temp_project && mkdir temp_project && unzip -q "$z" -d temp_project
             root=temp_project
@@ -40,6 +47,10 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.7
+
+      - name: Daftar project Gradle
+        working-directory: ${{ steps.proj.outputs.dir }}
+        run: gradle projects --no-daemon
 
       - name: Build debug APK
         working-directory: ${{ steps.proj.outputs.dir }}
