@@ -1,0 +1,52 @@
+name: Build and Release APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cari root proyek (settings.gradle.kts)
+        id: proj
+        run: |
+          f=$(find . -name settings.gradle.kts -not -path '*/node_modules/*' | head -n1)
+          [ -z "$f" ] && { echo "settings.gradle.kts tidak ditemukan"; exit 1; }
+          echo "dir=$(dirname "$f")" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.7
+
+      - name: Build debug APK
+        working-directory: ${{ steps.proj.outputs.dir }}
+        run: gradle assembleDebug --no-daemon
+
+      - name: Siapkan APK
+        run: |
+          apk=$(find "${{ steps.proj.outputs.dir }}" -path '*outputs/apk/debug/*.apk' | head -n1)
+          cp "$apk" AlfyConverter.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AlfyConverter-apk
+          path: AlfyConverter.apk
+
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="build-${{ github.run_number }}"
+          gh release create "$tag" AlfyConverter.apk --title "AlfyConverter $tag" --notes "Auto build #${{ github.run_number }}"
