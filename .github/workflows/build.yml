@@ -1,0 +1,54 @@
+name: Build and Release APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ekstrak ZIP (jika repo berisi zip) & cari root proyek
+        id: proj
+        run: |
+          z=$(find . -iname 'AlfyConverter*.zip' -not -path './.git/*' | head -n1)
+          if [ -n "$z" ]; then rm -rf temp_project && mkdir temp_project && unzip -q "$z" -d temp_project; fi
+          f=$(find . -name settings.gradle.kts -not -path './.git/*' | head -n1)
+          [ -z "$f" ] && { echo "settings.gradle.kts tidak ditemukan"; exit 1; }
+          echo "dir=$(dirname "$f")" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.7
+
+      - name: Build debug APK
+        working-directory: ${{ steps.proj.outputs.dir }}
+        run: gradle assembleDebug --no-daemon
+
+      - name: Siapkan APK
+        run: |
+          apk=$(find "${{ steps.proj.outputs.dir }}" -path '*outputs/apk/debug/*.apk' | head -n1)
+          cp "$apk" AlfyConverter.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AlfyConverter-apk
+          path: AlfyConverter.apk
+
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="build-${{ github.run_number }}"
+          gh release create "$tag" AlfyConverter.apk --title "AlfyConverter $tag" --notes "Auto build #${{ github.run_number }}"
